@@ -17,32 +17,38 @@ const executeSingleQuery = async (documentClient, query) => {
 const readDynamoTable = async ({ launchId, tableName, region }) => {
   const documentClient = new DynamoDB.DocumentClient({ region })
 
-  const query = {
-    TableName: tableName,
-    KeyConditionExpression: '#launchId = :launchId',
-    ExpressionAttributeNames: {
-      '#launchId': 'launchId'
-    },
-    ExpressionAttributeValues: {
-      ':launchId': launchId
-    },
-    ScanIndexForward: true
-  }
+  console.log(`read dynamo table "${tableName}" started`)
 
-  const result = []
-  let singleResult
-
-  do {
-    singleResult = await executeSingleQuery(documentClient, query)
-
-    query.ExclusiveStartKey = singleResult.LastEvaluatedKey
-
-    for (const item of singleResult.Items) {
-      result.push(item)
+  try {
+    const query = {
+      TableName: tableName,
+      KeyConditionExpression: '#launchId = :launchId',
+      ExpressionAttributeNames: {
+        '#launchId': 'launchId'
+      },
+      ExpressionAttributeValues: {
+        ':launchId': launchId
+      },
+      ScanIndexForward: true
     }
-  } while (singleResult.LastEvaluatedKey != null)
 
-  return result
+    const result = []
+    let singleResult
+
+    do {
+      singleResult = await executeSingleQuery(documentClient, query)
+
+      query.ExclusiveStartKey = singleResult.LastEvaluatedKey
+
+      for (const item of singleResult.Items) {
+        result.push(item)
+      }
+    } while (singleResult.LastEvaluatedKey != null)
+    console.log(`read dynamo table "${tableName}" succeeded`)
+    return result
+  } catch (error) {
+    console.log(`read dynamo table "${tableName}" failed`)
+  }
 }
 
 export default readDynamoTable

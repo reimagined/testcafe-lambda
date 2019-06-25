@@ -7,6 +7,9 @@ const setFunctionConcurrency = async ({
   concurrency
 }) => {
   const lambda = new Lambda({ region })
+  console.log(
+    `set function "${functionName}" concurrency = ${concurrency} started`
+  )
   while (true) {
     try {
       await lambda
@@ -21,9 +24,15 @@ const setFunctionConcurrency = async ({
       if (temporaryErrors.includes(error.code)) {
         continue
       }
+      console.log(
+        `set function "${functionName}" concurrency = ${concurrency} failed`
+      )
       throw error
     }
   }
+  console.log(
+    `set function "${functionName}" concurrency = ${concurrency} succeeded`
+  )
 }
 
 export default setFunctionConcurrency

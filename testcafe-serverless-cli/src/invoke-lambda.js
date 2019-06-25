@@ -10,33 +10,38 @@ const invokeLambda = async ({
 }) => {
   const lambda = new Lambda({ region })
 
-  while (true) {
-    try {
-      const lambdaResult = await lambda
-        .invoke({
-          InvocationType: invocationType,
-          FunctionName: lambdaArn,
-          Payload: JSON.stringify(payload)
-        })
-        .promise()
+  console.log(`invoke lambda "${lambdaArn}" started`)
+  try {
+    while (true) {
+      try {
+        const lambdaResult = await lambda
+          .invoke({
+            InvocationType: invocationType,
+            FunctionName: lambdaArn,
+            Payload: JSON.stringify(payload)
+          })
+          .promise()
 
-      if (invocationType === 'RequestResponse') {
-        if (lambdaResult.FunctionError != null) {
-          const error = JSON.parse(lambdaResult.Payload.toString())
-          throw error
+        if (invocationType === 'RequestResponse') {
+          if (lambdaResult.FunctionError != null) {
+            const error = JSON.parse(lambdaResult.Payload.toString())
+            throw error
+          }
+
+          console.log(`invoke lambda "${lambdaArn}" succeeded`)
+          return JSON.parse(lambdaResult.Payload.toString())
+        } else {
+          return null
         }
-
-        return JSON.parse(lambdaResult.Payload.toString())
-      } else {
-        return null
+      } catch (error) {
+        if (temporaryErrors.includes(error.code)) {
+          continue
+        }
+        throw error
       }
-    } catch (error) {
-      if (temporaryErrors.includes(error.code)) {
-        continue
-      }
-
-      throw error
     }
+  } catch (e) {
+    console.log(`invoke lambda "${lambdaArn}" failed`)
   }
 }
 
