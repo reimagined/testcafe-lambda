@@ -10,7 +10,8 @@
      "semi": ["error", "never"],
      "quotes": ["error", "single", { "allowTemplateLiterals": true, "avoidEscape": true }],
      "no-console": ["off"],
-     "no-empty": ["off"]
+     "no-empty": ["off"],
+     "no-constant-condition": ["off"]
   },
   "globals": {
     "fixture": "readonly",

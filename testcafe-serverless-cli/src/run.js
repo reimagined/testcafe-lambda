@@ -4,11 +4,14 @@ import fs from 'fs'
 import uploadToS3 from './upload-to-s3'
 import archiveDir from './archive-dir'
 import invokeLambda from './invoke-lambda'
+import readDynamoTable from './read-dynamo-table'
 
-const bucketName = 'testcafe-serverless-bucket'
-
-const testcafeLauncherName = 'testcafe-launcher-lambda'
-const testcafeBuilderName = 'testcafe-builder-lambda'
+import {
+  bucketName,
+  testcafeWorkerName,
+  testcafeBuilderName,
+  testcafeTableName
+} from './constants'
 
 const run = async ({
   region,
@@ -48,16 +51,17 @@ const run = async ({
 
   console.log('Installing started')
 
-  const [builtStatus, builtResult] = await invokeLambda({
-    region,
-    lambdaArn: `arn:aws:lambda:${region}:${accountId}:function:${testcafeBuilderName}`,
-    payload: {
-      fileKey: testcafeArchiveKey,
-      region
-    }
-  })
-
-  if (builtStatus !== 'ok') {
+  let builtResult = null
+  try {
+    builtResult = await invokeLambda({
+      region,
+      lambdaArn: `arn:aws:lambda:${region}:${accountId}:function:${testcafeBuilderName}`,
+      payload: {
+        fileKey: testcafeArchiveKey,
+        region
+      }
+    })
+  } catch (error) {
     throw new Error(
       `Build testcafe app failed: ${JSON.stringify(builtResult, null, 2)}`
     )
@@ -73,34 +77,48 @@ const run = async ({
 
   console.log('Testcafe started')
 
-  const [testcafeStatus, testcafeResult] = await invokeLambda({
-    region,
-    lambdaArn: `arn:aws:lambda:${region}:${accountId}:function:${testcafeLauncherName}`,
-    payload: {
-      fileKey: builtFileKey,
-      concurrency,
-      region,
-      accountId,
-      testPattern,
-      skipJsErrors,
-      skipUncaughtErrors,
-      selectorTimeout,
-      assertionTimeout,
-      pageLoadTimeout,
-      speed,
-      stopOnFirstFail
-    }
-  })
+  const workerLambdaArn = `arn:aws:lambda:${region}:${accountId}:function:${testcafeWorkerName}`
 
-  if (testcafeStatus !== 'ok') {
-    throw new Error(
-      `Run testcafe app failed: ${JSON.stringify(testcafeResult, null, 2)}`
+  const launchId = `testcafe-execution-${Date.now()}-${Math.floor(
+    Math.random() * 1000000000000
+  )}`
+
+  const invocationPromises = []
+  for (let workerIndex = 0; workerIndex < concurrency; workerIndex++) {
+    invocationPromises.push(
+      invokeLambda({
+        region,
+        lambdaArn: workerLambdaArn,
+        payload: {
+          fileKey: builtFileKey,
+          launchId,
+          workerIndex,
+          region,
+          testPattern,
+          skipJsErrors,
+          skipUncaughtErrors,
+          selectorTimeout,
+          assertionTimeout,
+          pageLoadTimeout,
+          speed,
+          stopOnFirstFail
+        },
+        invocationType: 'Event'
+      })
     )
   }
 
-  console.log('Testcafe succeeded')
+  await Promise.all(invocationPromises)
 
-  console.log(JSON.stringify(testcafeResult, null, 2))
+  setInterval(async () => {
+    const items = await readDynamoTable({
+      region,
+      launchId,
+      tableName: testcafeTableName
+    })
+
+    console.log(JSON.stringify(items, null, 2))
+  }, 15000)
 }
 
 export default run

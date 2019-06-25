@@ -5,18 +5,12 @@ import uploadToS3 from './upload-to-s3'
 import createLambda from './create-lambda'
 import dropOnS3 from './drop-on-s3'
 
-const bucketName = 'testcafe-serverless-bucket'
+import {
+  bucketName,
+  testcafeWorkerName,
+  testcafeBuilderName
+} from './constants'
 
-const testcafeLauncherName = 'testcafe-launcher-lambda'
-const testcafeWorkerName = 'testcafe-worker-lambda'
-const testcafeBuilderName = 'testcafe-builder-lambda'
-
-const testcafeLauncherFile = path.join(
-  __dirname,
-  '..',
-  'lambdas',
-  'testcafe-launcher-lambda.zip'
-)
 const testcafeWorkerFile = path.join(
   __dirname,
   '..',
@@ -61,12 +55,6 @@ const init = async ({ region, accountId }) => {
 
   await Promise.all([
     uploadToS3({
-      file: testcafeLauncherFile,
-      region,
-      bucketName,
-      fileKey: testcafeLauncherName
-    }),
-    uploadToS3({
       file: testcafeWorkerFile,
       region,
       bucketName,
@@ -81,18 +69,6 @@ const init = async ({ region, accountId }) => {
   ])
 
   await Promise.all([
-    createLambda({
-      functionName: testcafeLauncherName,
-      bucketName,
-      fileKey: testcafeLauncherName,
-      region,
-      policyContent: getPolicyContent({
-        region,
-        accountId,
-        lambdaName: testcafeLauncherName
-      }),
-      memorySize: 128
-    }),
     createLambda({
       functionName: testcafeWorkerName,
       bucketName,
@@ -120,11 +96,6 @@ const init = async ({ region, accountId }) => {
   ])
 
   await Promise.all([
-    dropOnS3({
-      region,
-      bucketName,
-      fileKey: testcafeLauncherName
-    }),
     dropOnS3({
       region,
       bucketName,

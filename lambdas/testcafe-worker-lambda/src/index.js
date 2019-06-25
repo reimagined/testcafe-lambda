@@ -8,10 +8,17 @@ import fs from 'fs'
 import downloadFromS3 from './download-from-s3'
 import unarchiveDir from './unarchive-dir'
 
-const bucketName = 'testcafe-serverless-bucket'
+import { bucketName, testcafeTableName, heartBeatInterval } from './constants'
+import createLogger from './create-logger'
+import writeDynamoTable from './write-dynamo-table'
+
+let heartBeat
 
 const handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false
+
+  clearInterval(heartBeat)
+
   const {
     fileKey,
     region,
@@ -22,10 +29,33 @@ const handler = async (event, context) => {
     assertionTimeout,
     pageLoadTimeout,
     speed,
-    stopOnFirstFail
+    stopOnFirstFail,
+    launchId,
+    workerIndex
   } = event
 
-  console.log('Worker launched', JSON.stringify(event))
+  const logger = createLogger({
+    tableName: testcafeTableName,
+    region,
+    launchId,
+    workerIndex
+  })
+
+  heartBeat = setInterval(
+    async () =>
+      await writeDynamoTable({
+        tableName: testcafeTableName,
+        region,
+        launchId,
+        workerIndex,
+        data: {
+          lastActiveTimestamp: Date.now()
+        }
+      }),
+    heartBeatInterval
+  )
+
+  logger.log('Worker launched', JSON.stringify(event))
 
   let testcafe = null,
     browser = null
@@ -47,7 +77,7 @@ const handler = async (event, context) => {
 
     testcafe = await createTestCafe('localhost', 1337, 1338)
     const remoteConnection = await testcafe.createBrowserConnection()
-    console.log('Testcafe server launched at', remoteConnection.url)
+    logger.log('Testcafe server launched at', remoteConnection.url)
 
     const connectionDonePromise = new Promise(resolve =>
       remoteConnection.once('ready', resolve)
@@ -60,11 +90,11 @@ const handler = async (event, context) => {
       headless: chromium.headless
     })
 
-    console.log('Headless browser launched as', await browser.userAgent())
+    logger.log('Headless browser launched as', await browser.userAgent())
 
     await (await browser.newPage()).goto(remoteConnection.url)
     await connectionDonePromise
-    console.log('Testcafe server accepted connection from headless browser')
+    logger.log('Testcafe server accepted connection from headless browser')
 
     let resultBuffer = Buffer.from('')
 
@@ -96,25 +126,49 @@ const handler = async (event, context) => {
 
     const result = JSON.parse(resultBuffer.toString('utf8'))
 
-    console.log('Failed functional tests for', failedCount)
-    console.log(JSON.stringify(result, null, 2))
+    await writeDynamoTable({
+      tableName: testcafeTableName,
+      region,
+      launchId,
+      workerIndex,
+      data: {
+        report: result
+      }
+    })
 
-    return result
+    logger.log('Failed functional tests for', failedCount)
+    logger.log(JSON.stringify(result, null, 2))
   } catch (error) {
-    console.error('Unhandled exception ', error)
+    logger.log('Unhandled exception ', error)
 
-    throw new Error(error)
-  } finally {
-    if (testcafe != null) {
-      await testcafe.close()
-    }
-
-    if (browser != null) {
-      await browser.close()
-    }
-
-    rimraf(path.join('/tmp/*'))
+    await writeDynamoTable({
+      tableName: testcafeTableName,
+      region,
+      launchId,
+      workerIndex,
+      data: {
+        error: {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        }
+      }
+    })
   }
+
+  clearInterval(heartBeat)
+
+  if (testcafe != null) {
+    await testcafe.close()
+  }
+
+  if (browser != null) {
+    await browser.close()
+  }
+
+  rimraf(path.join('/tmp/*'))
+
+  await logger.flush()
 }
 
 export { handler }
