@@ -1,7 +1,7 @@
 import writeDynamoTable from './write-dynamo-table'
 
 const createLogger = ({ tableName, region, launchId, workerIndex }) => {
-  let queue
+  let queue = Promise.resolve()
 
   const logs = []
 

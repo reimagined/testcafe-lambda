@@ -12,7 +12,7 @@ const invokeLambda = async ({
 
   while (true) {
     try {
-      const { Payload, FunctionError } = await lambda
+      const lambdaResult = await lambda
         .invoke({
           InvocationType: invocationType,
           FunctionName: lambdaArn,
@@ -20,12 +20,16 @@ const invokeLambda = async ({
         })
         .promise()
 
-      if (FunctionError != null) {
-        const error = JSON.parse(Payload.toString())
-        throw error
-      }
+      if (invocationType === 'RequestResponse') {
+        if (lambdaResult.FunctionError != null) {
+          const error = JSON.parse(lambdaResult.Payload.toString())
+          throw error
+        }
 
-      return JSON.parse(Payload.toString())
+        return JSON.parse(lambdaResult.Payload.toString())
+      } else {
+        return null
+      }
     } catch (error) {
       if (temporaryErrors.includes(error.code)) {
         continue

@@ -27,16 +27,16 @@ const testcafeBuilderFile = path.join(
   'testcafe-builder-lambda.zip'
 )
 
-const getPolicyContent = ({ region, accountId, lambdaName }) => [
-  {
-    Effect: 'Allow',
-    Action: ['lambda:InvokeFunction', 'lambda:InvokeAsync'],
-    Resource: `arn:aws:lambda:${region}:${accountId}:function:${testcafeWorkerName}`
-  },
+const getPolicyContent = ({ region, accountId, lambdaName, tableName }) => [
   {
     Effect: 'Allow',
     Action: ['s3:*'],
     Resource: `arn:aws:s3:::${bucketName}/*`
+  },
+  {
+    Action: ['dynamodb:Query', 'dynamodb:UpdateItem'],
+    Resource: `arn:aws:dynamodb:${region}:${accountId}:table/${tableName}`,
+    Effect: 'Allow'
   },
   {
     Effect: 'Allow',
@@ -82,7 +82,8 @@ const init = async ({ region, accountId }) => {
       policyContent: getPolicyContent({
         region,
         accountId,
-        lambdaName: testcafeWorkerName
+        lambdaName: testcafeWorkerName,
+        tableName: testcafeTableName
       }),
       memorySize: 1600
     }),
@@ -94,7 +95,8 @@ const init = async ({ region, accountId }) => {
       policyContent: getPolicyContent({
         region,
         accountId,
-        lambdaName: testcafeBuilderName
+        lambdaName: testcafeBuilderName,
+        tableName: testcafeTableName
       }),
       memorySize: 1600
     })
