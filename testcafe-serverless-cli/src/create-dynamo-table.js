@@ -11,11 +11,15 @@ const createDynamoTable = async ({
   const database = new DynamoDB({ region })
 
   if (await checkDynamoTableExists({ region, tableName })) {
-    await database.deleteTable({
-      TableName: tableName
-    })
+    console.log(`delete dynamo table "${tableName}" started`)
+    await database
+      .deleteTable({
+        TableName: tableName
+      })
+      .promise()
 
     while (await checkDynamoTableExists({ region, tableName })) {}
+    console.log(`delete dynamo table "${tableName}" succeeded`)
   }
 
   const schema = {
@@ -41,8 +45,8 @@ const createDynamoTable = async ({
     ]
   }
 
+  console.log(`create dynamo table "${tableName}" started`)
   let dynamoTable = null
-
   while (true) {
     try {
       dynamoTable = await database
@@ -60,8 +64,7 @@ const createDynamoTable = async ({
       throw error
     }
   }
-
-  while (!(await checkDynamoTableExists({ region, tableName }))) {}
+  console.log(`create dynamo table "${tableName}" succeeded`)
 
   return dynamoTable
 }

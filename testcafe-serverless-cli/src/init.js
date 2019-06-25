@@ -8,8 +8,11 @@ import dropOnS3 from './drop-on-s3'
 import {
   bucketName,
   testcafeWorkerName,
-  testcafeBuilderName
+  testcafeBuilderName,
+  testcafeTableName
 } from './constants'
+import checkDynamoTableExists from './check-dynamo-table-exists'
+import createDynamoTable from './create-dynamo-table'
 
 const testcafeWorkerFile = path.join(
   __dirname,
@@ -52,6 +55,8 @@ const getPolicyContent = ({ region, accountId, lambdaName }) => [
 
 const init = async ({ region, accountId }) => {
   await createS3Bucket({ region, bucketName })
+
+  await createDynamoTable({ region, tableName: testcafeTableName })
 
   await Promise.all([
     uploadToS3({
@@ -107,6 +112,10 @@ const init = async ({ region, accountId }) => {
       fileKey: testcafeBuilderName
     })
   ])
+
+  while (
+    !(await checkDynamoTableExists({ region, tableName: testcafeTableName }))
+  ) {}
 }
 
 export default init
