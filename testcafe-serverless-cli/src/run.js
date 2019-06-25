@@ -110,15 +110,41 @@ const run = async ({
 
   await Promise.all(invocationPromises)
 
-  setInterval(async () => {
+  while (true) {
     const items = await readDynamoTable({
       region,
       launchId,
       tableName: testcafeTableName
     })
 
-    console.log(JSON.stringify(items, null, 2))
-  }, 15000)
+    const doneWorkers = new Set(
+      items
+        .filter(({ report, error }) => report != null || error != null)
+        .map(({ workerIndex }) => workerIndex)
+    ).size
+
+    if (doneWorkers !== concurrency) {
+      console.log(
+        `Ready ${doneWorkers} workers from ${concurrency}, waiting...`
+      )
+
+      await new Promise(resolve => setTimeout(resolve, 15000))
+
+      continue
+    }
+
+    for (const { workerIndex, report, error } of items) {
+      if (report != null) {
+        console.log(`=== WORKER ${workerIndex} REPORT ===`)
+        console.log(JSON.stringify(report, null, 2))
+      } else if (error != null) {
+        console.log(`=== WORKER ${workerIndex} ERROR ===`)
+        console.log(JSON.stringify(error, null, 2))
+      }
+    }
+
+    break
+  }
 }
 
 export default run

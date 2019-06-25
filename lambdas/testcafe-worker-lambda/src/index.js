@@ -9,7 +9,6 @@ import downloadFromS3 from './download-from-s3'
 import unarchiveDir from './unarchive-dir'
 
 import { bucketName, testcafeTableName, heartBeatInterval } from './constants'
-import createLogger from './create-logger'
 import writeDynamoTable from './write-dynamo-table'
 
 let heartBeat
@@ -34,13 +33,6 @@ const handler = async (event, context) => {
     workerIndex
   } = event
 
-  const logger = createLogger({
-    tableName: testcafeTableName,
-    region,
-    launchId,
-    workerIndex
-  })
-
   heartBeat = setInterval(
     async () =>
       await writeDynamoTable({
@@ -55,7 +47,7 @@ const handler = async (event, context) => {
     heartBeatInterval
   )
 
-  logger.log('Worker launched', JSON.stringify(event))
+  console.log('Worker launched', JSON.stringify(event))
 
   let testcafe = null,
     browser = null
@@ -77,7 +69,7 @@ const handler = async (event, context) => {
 
     testcafe = await createTestCafe('localhost', 1337, 1338)
     const remoteConnection = await testcafe.createBrowserConnection()
-    logger.log('Testcafe server launched at', remoteConnection.url)
+    console.log('Testcafe server launched at', remoteConnection.url)
 
     const connectionDonePromise = new Promise(resolve =>
       remoteConnection.once('ready', resolve)
@@ -90,11 +82,11 @@ const handler = async (event, context) => {
       headless: chromium.headless
     })
 
-    logger.log('Headless browser launched as', await browser.userAgent())
+    console.log('Headless browser launched as', await browser.userAgent())
 
     await (await browser.newPage()).goto(remoteConnection.url)
     await connectionDonePromise
-    logger.log('Testcafe server accepted connection from headless browser')
+    console.log('Testcafe server accepted connection from headless browser')
 
     let resultBuffer = Buffer.from('')
 
@@ -136,10 +128,13 @@ const handler = async (event, context) => {
       }
     })
 
-    logger.log('Failed functional tests for', failedCount)
-    logger.log(JSON.stringify(result, null, 2))
+    if (failedCount > 0) {
+      console.error(`Failed ${failedCount} functional tests`)
+    }
+
+    console.log(JSON.stringify(result, null, 2))
   } catch (error) {
-    logger.log('Unhandled exception ', error)
+    console.error('Unhandled exception ', error)
 
     await writeDynamoTable({
       tableName: testcafeTableName,
@@ -167,8 +162,6 @@ const handler = async (event, context) => {
   }
 
   rimraf(path.join('/tmp/*'))
-
-  await logger.flush()
 }
 
 export { handler }
