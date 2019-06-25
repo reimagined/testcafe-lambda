@@ -12,6 +12,7 @@ import {
   testcafeBuilderName,
   testcafeTableName
 } from './constants'
+import setFunctionConcurrency from './set-function-concurrency'
 
 const run = async ({
   region,
@@ -83,6 +84,21 @@ const run = async ({
     Math.random() * 1000000000000
   )}`
 
+  process.on(
+    'SIGINT',
+    setFunctionConcurrency.bind(null, {
+      region,
+      functionName: testcafeWorkerName,
+      concurrency: 0
+    })
+  )
+
+  await setFunctionConcurrency({
+    region,
+    functionName: testcafeWorkerName,
+    concurrency
+  })
+
   const invocationPromises = []
   for (let workerIndex = 0; workerIndex < concurrency; workerIndex++) {
     invocationPromises.push(
@@ -145,6 +161,12 @@ const run = async ({
 
     break
   }
+
+  await setFunctionConcurrency({
+    region,
+    functionName: testcafeWorkerName,
+    concurrency: 0
+  })
 }
 
 export default run
